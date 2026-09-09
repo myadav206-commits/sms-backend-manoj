@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, get_db
 from app.models import Student
-from app.schema import StudentCreate
+from app.schema import StudentCreate,StudentUpdate
 
 
 Base.metadata.create_all(bind=engine)
@@ -124,4 +124,59 @@ def delete_student(
 
     return {
         "message": "Student deleted successfully"
+    }
+
+@app.put("/students/{student_id}")
+def update_student(
+    student_id: int,
+    student_data: StudentUpdate,
+    db: Session = Depends(get_db)
+):
+    # Find student by ID
+    student = (
+        db.query(Student)
+        .filter(Student.id == student_id)
+        .first()
+    )
+
+    # Student does not exist
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found"
+        )
+
+    # Check whether another student already uses this email
+    existing_email = (
+        db.query(Student)
+        .filter(
+            Student.email == student_data.email,
+            Student.id != student_id
+        )
+        .first()
+    )
+
+    if existing_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
+
+    # Update values
+    student.name = student_data.name
+    student.email = student_data.email
+    student.age = student_data.age
+
+    # Save to MySQL
+    db.commit()
+    db.refresh(student)
+
+    return {
+        "message": "Student updated successfully",
+        "student": {
+            "id": student.id,
+            "name": student.name,
+            "email": student.email,
+            "age": student.age
+        }
     }
